@@ -1,7 +1,8 @@
 """
 Node: generate_report
 
-Uses the LLM to generate a final analysis report from risk assessments.
+Generates the final analysis report. Update order is deterministic (rule-based).
+The LLM is only used to write the executive summary prose.
 """
 
 import json
@@ -12,6 +13,7 @@ from depadvisor.agent.state import DepAdvisorState
 from depadvisor.llm.prompts import REPORT_GENERATION_PROMPT
 from depadvisor.llm.provider import create_llm
 from depadvisor.models.schemas import AnalysisReport, RiskLevel
+from depadvisor.utils.scoring import compute_update_order
 
 
 def _extract_json(text: str) -> str:
@@ -26,10 +28,8 @@ async def generate_report_node(state: DepAdvisorState) -> dict:
     """
     Generate the final analysis report.
 
-    Reads: state['risk_assessments'], state['dependencies'], state['updates'],
-           state['vulnerabilities'], state['llm_provider'], state['ecosystem'],
-           state['project_path']
-    Writes: state['report'], state['current_node']
+    - Update order: deterministic from rule-based scores
+    - Summary: LLM-generated prose (best-effort, with fallback)
     """
     risk_assessments = state.get("risk_assessments", [])
     dependencies = state.get("dependencies", [])
@@ -49,42 +49,45 @@ async def generate_report_node(state: DepAdvisorState) -> dict:
     low = [a for a in risk_assessments if a.risk_level == RiskLevel.LOW]
     skip = [a for a in risk_assessments if a.risk_level == RiskLevel.SKIP]
 
-    # Generate summary via LLM
+    # Deterministic update order from rule-based scores
+    update_order = compute_update_order(risk_assessments)
+
+    # Generate summary via LLM (best-effort)
     summary = "No updates available. All dependencies are up to date."
-    update_order = []
 
     if risk_assessments:
-        assessments_json = json.dumps(
-            [a.model_dump(mode="json") for a in risk_assessments],
-            indent=2,
-        )
-
-        prompt = REPORT_GENERATION_PROMPT.format(
-            project_path=project_path,
-            ecosystem=ecosystem.value,
-            date=datetime.now(UTC).strftime("%Y-%m-%d"),
-            total_deps=len(dependencies),
-            total_updates=len(updates),
-            total_vulns=total_vulns,
-            risk_assessments=assessments_json,
+        # Default summary (used if LLM fails)
+        summary = (
+            f"Analysis found {len(updates)} dependencies with available updates "
+            f"and {total_vulns} known vulnerabilities. "
+            f"{len(critical)} critical, {len(high)} high, "
+            f"{len(medium)} medium, {len(low)} low priority updates."
         )
 
         try:
+            assessments_json = json.dumps(
+                [a.model_dump(mode="json") for a in risk_assessments],
+                indent=2,
+            )
+
+            prompt = REPORT_GENERATION_PROMPT.format(
+                project_path=project_path,
+                ecosystem=ecosystem.value,
+                date=datetime.now(UTC).strftime("%Y-%m-%d"),
+                total_deps=len(dependencies),
+                total_updates=len(updates),
+                total_vulns=total_vulns,
+                risk_assessments=assessments_json,
+            )
+
             llm = create_llm(llm_provider)
             response = await llm.ainvoke(prompt)
             content = response.content if hasattr(response, "content") else str(response)
             parsed = json.loads(_extract_json(content))
             summary = parsed.get("summary", summary)
-            update_order = parsed.get("update_order", [])
+            # NOTE: update_order from LLM is ignored — we use the deterministic one
         except Exception as e:
-            errors.append(f"Report generation LLM call failed: {e}")
-            # Fall back to a basic summary
-            summary = (
-                f"Analysis found {len(updates)} dependencies with available updates "
-                f"and {total_vulns} known vulnerabilities. "
-                f"{len(critical)} critical, {len(high)} high, {len(medium)} medium priority updates."
-            )
-            update_order = [a.package_name for a in critical + high + medium + low]
+            errors.append(f"Report summary LLM call failed (using default): {e}")
 
     report = AnalysisReport(
         project_path=project_path,
