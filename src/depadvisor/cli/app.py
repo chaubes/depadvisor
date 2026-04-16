@@ -136,11 +136,12 @@ def analyze(
         cloned_dir = _clone_repo(path, verbose=verbose)
         path = cloned_dir
 
+    stderr = Console(stderr=True)
     try:
         _run_analyze(path, ecosystem, llm, format, output, fail_on, include_dev, verbose)
     finally:
         if cloned_dir:
-            console.print("Cleaning up cloned repository...")
+            stderr.print("Cleaning up cloned repository...")
             shutil.rmtree(cloned_dir, ignore_errors=True)
 
 
@@ -233,11 +234,12 @@ def scan(
         cloned_dir = _clone_repo(path, verbose=True)
         path = cloned_dir
 
+    stderr = Console(stderr=True)
     try:
         _run_scan(path, ecosystem)
     finally:
         if cloned_dir:
-            console.print("Cleaning up cloned repository...")
+            stderr.print("Cleaning up cloned repository...")
             shutil.rmtree(cloned_dir, ignore_errors=True)
 
 
