@@ -62,10 +62,12 @@ class OSVClient:
         for pkg_name, version, ecosystem in packages:
             osv_eco = ECOSYSTEM_MAP.get(ecosystem)
             if osv_eco:
-                queries.append({
-                    "version": version,
-                    "package": {"name": pkg_name, "ecosystem": osv_eco},
-                })
+                queries.append(
+                    {
+                        "version": version,
+                        "package": {"name": pkg_name, "ecosystem": osv_eco},
+                    }
+                )
             else:
                 queries.append({})
 

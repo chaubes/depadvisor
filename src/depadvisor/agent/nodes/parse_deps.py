@@ -24,11 +24,24 @@ PARSERS = {
 
 # Directories to skip during file discovery
 SKIP_DIRS = {
-    "node_modules", ".venv", "venv", "env", ".env",
-    ".git", ".hg", ".svn",
-    "target", "build", "dist", "__pycache__",
-    ".tox", ".nox", ".mypy_cache", ".ruff_cache",
-    "vendor", "bower_components",
+    "node_modules",
+    ".venv",
+    "venv",
+    "env",
+    ".env",
+    ".git",
+    ".hg",
+    ".svn",
+    "target",
+    "build",
+    "dist",
+    "__pycache__",
+    ".tox",
+    ".nox",
+    ".mypy_cache",
+    ".ruff_cache",
+    "vendor",
+    "bower_components",
 }
 
 

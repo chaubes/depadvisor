@@ -289,11 +289,7 @@ def _run_scan(path: str, ecosystem: str | None) -> None:
     async def _scan():
         client = OSVClient()
         try:
-            packages = [
-                (dep.name, dep.current_version, dep.ecosystem)
-                for dep in deps
-                if dep.current_version
-            ]
+            packages = [(dep.name, dep.current_version, dep.ecosystem) for dep in deps if dep.current_version]
             if not packages:
                 return []
             all_reports = await client.query_batch(packages)

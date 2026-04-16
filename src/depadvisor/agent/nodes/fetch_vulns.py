@@ -22,11 +22,7 @@ async def fetch_vulnerabilities_node(state: DepAdvisorState) -> dict:
     if not dependencies:
         return {"vulnerabilities": [], "current_node": "fetch_vulns", "errors": errors}
 
-    packages = [
-        (dep.name, dep.current_version, dep.ecosystem)
-        for dep in dependencies
-        if dep.current_version
-    ]
+    packages = [(dep.name, dep.current_version, dep.ecosystem) for dep in dependencies if dep.current_version]
 
     if not packages:
         return {"vulnerabilities": [], "current_node": "fetch_vulns", "errors": errors}
