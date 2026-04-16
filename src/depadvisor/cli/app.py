@@ -32,10 +32,7 @@ def _load_env() -> None:
 
 def _is_git_url(path: str) -> bool:
     """Check if the path looks like a git repository URL."""
-    return bool(
-        re.match(r"^(https?://|git@|git://|ssh://)", path)
-        or (path.endswith(".git") and "/" in path)
-    )
+    return bool(re.match(r"^(https?://|git@|git://|ssh://)", path) or (path.endswith(".git") and "/" in path))
 
 
 def _clone_repo(url: str, verbose: bool = False) -> str:
