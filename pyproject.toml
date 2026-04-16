@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "depadvisor"
-version = "0.2.0"
+version = "0.3.0"
 description = "AI-powered dependency update advisor built with LangGraph"
 readme = "README.md"
 license = { text = "MIT" }
