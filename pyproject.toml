@@ -4,19 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "depadvisor"
-version = "0.1.1"
+version = "0.1.2"
 description = "AI-powered dependency update advisor built with LangGraph"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
 authors = [{ name = "Saurabh" }]
 keywords = ["dependencies", "security", "ai", "langgraph", "devops"]
-
-[project.urls]
-Homepage = "https://github.com/chaubes/depadvisor"
-Repository = "https://github.com/chaubes/depadvisor"
-Issues = "https://github.com/chaubes/depadvisor/issues"
-Changelog = "https://github.com/chaubes/depadvisor/blob/master/CHANGELOG.md"
 
 dependencies = [
     "langgraph>=1.0.0",
@@ -31,6 +25,12 @@ dependencies = [
     "python-dotenv>=1.0",
     "langsmith>=0.7",
 ]
+
+[project.urls]
+Homepage = "https://github.com/chaubes/depadvisor"
+Repository = "https://github.com/chaubes/depadvisor"
+Issues = "https://github.com/chaubes/depadvisor/issues"
+Changelog = "https://github.com/chaubes/depadvisor/blob/master/CHANGELOG.md"
 
 [project.optional-dependencies]
 server = ["fastapi>=0.115", "uvicorn>=0.30"]
