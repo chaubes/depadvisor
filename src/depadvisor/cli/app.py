@@ -261,7 +261,9 @@ def _run_scan(path: str, ecosystem: str | None) -> None:
             console.print("[red]Could not auto-detect ecosystem.[/red]")
             raise typer.Exit(code=1)
 
-    # Parse dependencies
+    # Parse dependencies (uses same skip-dirs logic as the agent node)
+    from depadvisor.agent.nodes.parse_deps import _deduplicate, _find_dep_files
+
     parsers = {
         Ecosystem.PYTHON: PythonParser(),
         Ecosystem.NODE: NodeParser(),
@@ -270,12 +272,12 @@ def _run_scan(path: str, ecosystem: str | None) -> None:
     parser = parsers[eco]
     project_path = Path(path)
     deps = []
-    for file_path in project_path.rglob("*"):
-        if parser.can_parse(str(file_path)):
-            try:
-                deps.extend(parser.parse(str(file_path)))
-            except Exception as e:
-                console.print(f"[yellow]Warning: {e}[/yellow]")
+    for file_path in _find_dep_files(project_path, parser):
+        try:
+            deps.extend(parser.parse(str(file_path)))
+        except Exception as e:
+            console.print(f"[yellow]Warning: {e}[/yellow]")
+    deps = _deduplicate(deps)
 
     if not deps:
         console.print("No dependencies found.")
@@ -283,17 +285,19 @@ def _run_scan(path: str, ecosystem: str | None) -> None:
 
     console.print(f"Found {len(deps)} dependencies. Scanning for vulnerabilities...")
 
-    # Query OSV
+    # Query OSV using batch API
     async def _scan():
         client = OSVClient()
         try:
-            results = []
-            for dep in deps:
-                if dep.current_version:
-                    report = await client.query_vulnerabilities(dep.name, dep.current_version, dep.ecosystem)
-                    if report.vulnerabilities:
-                        results.append(report)
-            return results
+            packages = [
+                (dep.name, dep.current_version, dep.ecosystem)
+                for dep in deps
+                if dep.current_version
+            ]
+            if not packages:
+                return []
+            all_reports = await client.query_batch(packages)
+            return [r for r in all_reports if r.vulnerabilities]
         finally:
             await client.close()
 

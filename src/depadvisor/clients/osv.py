@@ -25,12 +25,137 @@ class OSVClient:
     """Client for the OSV.dev API."""
 
     BASE_URL = "https://api.osv.dev/v1"
+    BATCH_SIZE = 1000  # Max queries per batch request
 
-    def __init__(self, timeout: float = 30.0):
+    def __init__(self, timeout: float = 60.0):
         self._client = httpx.AsyncClient(timeout=timeout)
 
     async def close(self):
         await self._client.aclose()
+
+    async def query_batch(
+        self,
+        packages: list[tuple[str, str, Ecosystem]],
+    ) -> list[VulnerabilityReport]:
+        """
+        Query OSV for vulnerabilities on multiple packages in batch.
+
+        Args:
+            packages: List of (package_name, version, ecosystem) tuples
+
+        Returns:
+            List of VulnerabilityReport, one per input package
+        """
+        results = []
+        for i in range(0, len(packages), self.BATCH_SIZE):
+            batch = packages[i : i + self.BATCH_SIZE]
+            batch_results = await self._query_batch_chunk(batch)
+            results.extend(batch_results)
+        return results
+
+    async def _query_batch_chunk(
+        self,
+        packages: list[tuple[str, str, Ecosystem]],
+    ) -> list[VulnerabilityReport]:
+        """Send a single batch request to OSV."""
+        queries = []
+        for pkg_name, version, ecosystem in packages:
+            osv_eco = ECOSYSTEM_MAP.get(ecosystem)
+            if osv_eco:
+                queries.append({
+                    "version": version,
+                    "package": {"name": pkg_name, "ecosystem": osv_eco},
+                })
+            else:
+                queries.append({})
+
+        try:
+            response = await self._client.post(
+                f"{self.BASE_URL}/querybatch",
+                json={"queries": queries},
+            )
+            response.raise_for_status()
+            data = response.json()
+        except httpx.HTTPError:
+            # Fall back to empty reports on batch failure
+            return [
+                VulnerabilityReport(
+                    package_name=pkg_name,
+                    ecosystem=ecosystem,
+                    current_version=version,
+                )
+                for pkg_name, version, ecosystem in packages
+            ]
+
+        # Collect all unique vuln IDs that need full details
+        vuln_ids = set()
+        for batch_result in data.get("results", []):
+            for vuln in batch_result.get("vulns", []):
+                vuln_id = vuln.get("id")
+                if vuln_id and not vuln.get("summary"):
+                    vuln_ids.add(vuln_id)
+
+        # Fetch full details for vulns that only have id+modified
+        vuln_details = {}
+        if vuln_ids:
+            vuln_details = await self._fetch_vuln_details(list(vuln_ids))
+
+        results = []
+        for idx, (pkg_name, version, ecosystem) in enumerate(packages):
+            osv_eco = ECOSYSTEM_MAP.get(ecosystem, "")
+            batch_result = data.get("results", [])[idx] if idx < len(data.get("results", [])) else {}
+            vulns_data = batch_result.get("vulns", [])
+
+            vulnerabilities = []
+            for vuln in vulns_data:
+                # Use hydrated details if available
+                vuln_id = vuln.get("id", "")
+                if vuln_id in vuln_details:
+                    vuln = vuln_details[vuln_id]
+
+                severity = self._extract_severity(vuln)
+                fixed_version = self._extract_fixed_version(vuln, osv_eco)
+                vulnerabilities.append(
+                    VulnerabilityInfo(
+                        cve_id=self._extract_cve_id(vuln),
+                        osv_id=vuln.get("id"),
+                        summary=vuln.get("summary", "No description available"),
+                        severity=severity,
+                        affected_versions=self._format_affected(vuln),
+                        fixed_version=fixed_version,
+                        published_date=self._parse_date(vuln.get("published")),
+                        url=f"https://osv.dev/vulnerability/{vuln.get('id', '')}",
+                    )
+                )
+
+            results.append(
+                VulnerabilityReport(
+                    package_name=pkg_name,
+                    ecosystem=ecosystem,
+                    current_version=version,
+                    vulnerabilities=vulnerabilities,
+                )
+            )
+
+        return results
+
+    async def _fetch_vuln_details(self, vuln_ids: list[str]) -> dict[str, dict]:
+        """Fetch full vulnerability details by ID, in parallel."""
+        import asyncio
+
+        semaphore = asyncio.Semaphore(10)
+
+        async def fetch_one(vuln_id: str) -> tuple[str, dict]:
+            async with semaphore:
+                try:
+                    resp = await self._client.get(f"{self.BASE_URL}/vulns/{vuln_id}")
+                    resp.raise_for_status()
+                    return vuln_id, resp.json()
+                except httpx.HTTPError:
+                    return vuln_id, {}
+
+        results = await asyncio.gather(*[fetch_one(vid) for vid in vuln_ids])
+        return {vid: data for vid, data in results if data}
 
     async def query_vulnerabilities(
         self,
