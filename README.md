@@ -12,6 +12,8 @@ DepAdvisor analyzes your project's dependencies, checks for available updates, f
 
 Unlike Dependabot or Renovate which tell you *that* updates exist, DepAdvisor tells you *why you should or shouldn't update*, *what will break*, and *in what order to proceed*.
 
+![DepAdvisor CLI Output](docs/cli-screenshot.png)
+
 ## Features
 
 - **Multi-ecosystem**: Python (pip/poetry), Node.js (npm), Java (Maven)
